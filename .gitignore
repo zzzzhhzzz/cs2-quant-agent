@@ -25,5 +25,6 @@ Thumbs.db
 
 # Project specific
 output/
+!output/sample_report.html
 *.csv
 *.log
