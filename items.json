@@ -1,5 +1,6 @@
 {
   "news_enabled": false,
+  "llm_provider": "deepseek",
   "items": [
     {
       "name": "USP-印花集",

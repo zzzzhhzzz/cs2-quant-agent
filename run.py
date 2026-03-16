@@ -27,7 +27,7 @@ def load_config(config_path: str = "items.json") -> dict:
         return json.load(f)
 
 
-def generate_analysis(item_name: str, features_text: str, df, news_enabled: bool = False) -> str:
+def generate_analysis(item_name: str, features_text: str, df, news_enabled: bool = False, llm_provider: str = "deepseek") -> str:
     """
     Generate analysis report using LLM with CS2-specific indicators.
 
@@ -36,6 +36,7 @@ def generate_analysis(item_name: str, features_text: str, df, news_enabled: bool
         features_text: Extracted CS2-specific features
         df: DataFrame with K-line data and CS2 indicators
         news_enabled: Whether to fetch news (default: False)
+        llm_provider: LLM provider - "anthropic", "openai", "deepseek", "mock" (default: deepseek)
 
     Returns:
         Analysis report string
@@ -92,16 +93,26 @@ def generate_analysis(item_name: str, features_text: str, df, news_enabled: bool
     else:
         price_change_30d = 0
 
-    # Build a custom analysis with item name baked in
-    # Use DeepSeek client - API key from environment variable
+    # Build a custom analysis with LLM
     import os
-    DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
-    if not DEEPSEEK_API_KEY:
-        print("[WARN] DEEPSEEK_API_KEY not set, using mock client")
-        from src.agent.llm_client import MockClient
-        analyzer = CS2Analyzer(provider="mock")
+    provider = llm_provider.lower()
+
+    # Get API key based on provider
+    api_key = ""
+    if provider == "deepseek":
+        api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+    elif provider == "openai":
+        api_key = os.environ.get("OPENAI_API_KEY", "")
+    elif provider == "anthropic":
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+
+    # Use provider if API key available, otherwise fallback to mock
+    if api_key:
+        print(f"[LLM] Using {provider} provider")
+        analyzer = CS2Analyzer(provider=provider, api_key=api_key)
     else:
-        analyzer = CS2Analyzer(provider="deepseek", api_key=DEEPSEEK_API_KEY)
+        print(f"[WARN] {provider.upper()}_API_KEY not set, using mock client")
+        analyzer = CS2Analyzer(provider="mock")
 
     # Prepare K-line data for LLM (last 30 periods with CS2 indicators)
     recent_klines = df.tail(30).copy()
@@ -235,13 +246,14 @@ def save_kline(item_name: str, df, output_dir: str = "output") -> str:
     return filepath
 
 
-def process_item(item: dict, news_enabled: bool = False) -> dict:
+def process_item(item: dict, news_enabled: bool = False, llm_provider: str = "deepseek") -> dict:
     """
     Process a single item: scrape K-line, calculate indicators, generate report.
 
     Args:
         item: Dict with 'name', 'url', 'timeframe' keys
         news_enabled: Whether to fetch news
+        llm_provider: LLM provider
 
     Returns:
         Dict with processing result
@@ -283,7 +295,7 @@ def process_item(item: dict, news_enabled: bool = False) -> dict:
 
         # Step 3: Generate analysis report
         print(f"[3/4] Generating analysis report...")
-        report = generate_analysis(name, features_text, df_with_indicators, news_enabled)
+        report = generate_analysis(name, features_text, df_with_indicators, news_enabled, llm_provider)
 
         # Step 4: Save report
         print(f"[4/4] Saving report...")
@@ -333,18 +345,22 @@ def main():
         print("No items found in configuration.")
         sys.exit(1)
 
-    # Get news config
+    # Get news and LLM config
     news_enabled = config.get('news_enabled', False)
+    llm_provider = config.get('llm_provider', 'deepseek')
+
     if news_enabled:
         print("\n[NEWS] News fetching is ENABLED")
     else:
         print("\n[NEWS] News fetching is DISABLED (set news_enabled: true in items.json to enable)")
 
+    print(f"[LLM] Provider: {llm_provider} (change with 'llm_provider' in items.json)")
+
     # Process each item
     results = []
     for i, item in enumerate(items, 1):
         print(f"\n[{i}/{len(items)}] Processing item...")
-        result = process_item(item, news_enabled=news_enabled)
+        result = process_item(item, news_enabled=news_enabled, llm_provider=llm_provider)
         results.append(result)
 
     # Summary
