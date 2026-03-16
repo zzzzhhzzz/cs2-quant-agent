@@ -93,9 +93,15 @@ def generate_analysis(item_name: str, features_text: str, df, news_enabled: bool
         price_change_30d = 0
 
     # Build a custom analysis with item name baked in
-    # Use DeepSeek client with API key
-    DEEPSEEK_API_KEY = "sk-c413519571d048a6b29d1a34f481f100"
-    analyzer = CS2Analyzer(provider="deepseek", api_key=DEEPSEEK_API_KEY)
+    # Use DeepSeek client - API key from environment variable
+    import os
+    DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+    if not DEEPSEEK_API_KEY:
+        print("[WARN] DEEPSEEK_API_KEY not set, using mock client")
+        from src.agent.llm_client import MockClient
+        analyzer = CS2Analyzer(provider="mock")
+    else:
+        analyzer = CS2Analyzer(provider="deepseek", api_key=DEEPSEEK_API_KEY)
 
     # Prepare K-line data for LLM (last 30 periods with CS2 indicators)
     recent_klines = df.tail(30).copy()
